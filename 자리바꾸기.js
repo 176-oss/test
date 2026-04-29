@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Shuffle, Printer, Pin, PinOff, Users, LayoutGrid, Maximize2, Trash2, ArrowRightLeft, Settings, Save, History, X, Hand, Image as ImageIcon, FileText, Eye } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'https://esm.sh/react@18';
+import { Shuffle, Printer, Pin, PinOff, Users, LayoutGrid, Maximize2, Trash2, ArrowRightLeft, Settings, Save, History, X, Hand, Image as ImageIcon, FileText, Eye } from 'https://esm.sh/lucide-react';
 
 // html2canvas 및 jsPDF를 동적으로 로드하기 위한 헬퍼 함수
 const loadScript = (src) => {

@@ -4,47 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스마트 자리바꾸기</title>
-    <!-- React 및 관련 라이브러리 (ESM 버전) -->
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18",
-        "react-dom": "https://esm.sh/react-dom@18",
-        "react-dom/client": "https://esm.sh/react-dom@18/client",
-        "lucide-react": "https://esm.sh/lucide-react"
-      }
-    }
-    </script>
-    <!-- Tailwind CSS (런타임 버전) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Babel Standalone (JSX 변환용) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        /* 추가적인 스타일 (필요시) */
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap');
-        body { font-family: 'Pretendard', sans-serif; }
-        
-        /* 자리바꾸기 프로그램에서 사용하는 애니메이션 */
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .animate-in { animation: fadeIn 0.2s ease-out forwards; }
+        body { font-family: 'Pretendard', sans-serif; margin: 0; padding: 0; }
+        #root { min-height: 100vh; }
     </style>
 </head>
 <body class="bg-gray-50">
-    <div id="root"></div>
+    <div id="root">
+        <div class="flex items-center justify-center h-screen">
+            <div class="text-center">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+                <p class="text-gray-600">프로그램을 구성 중입니다...</p>
+            </div>
+        </div>
+    </div>
 
-    <!-- Babel을 이용한 브라우저 내 JSX 변환 -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 💡 여러분의 JS 파일을 직접 불러와서 JSX를 변환합니다. -->
     <script type="text/babel" data-type="module">
-        import React from 'react';
-        import { createRoot } from 'react-dom/client';
+        import React from 'https://esm.sh/react@18';
+        import { createRoot } from 'https://esm.sh/react-dom@18/client';
         import App from './자리바꾸기.js';
 
         const container = document.getElementById('root');
         const root = createRoot(container);
-        root.render(<App />);
+        root.render(React.createElement(App));
     </script>
     
-    <!-- 뒤로가기 버튼 (포털로 이동) -->
-    <a href="index.html" class="fixed bottom-6 right-6 bg-white shadow-lg border border-gray-200 p-3 rounded-full hover:bg-gray-50 transition-all z-50 flex items-center justify-center group no-print" title="메뉴로 돌아가기">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600 group-hover:text-blue-600 transition-colors"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+    <!-- 메뉴로 돌아가기 버튼 -->
+    <a href="index.html" class="fixed bottom-6 right-6 bg-white shadow-lg border border-gray-200 p-3 rounded-full hover:bg-gray-50 transition-all z-50 flex items-center justify-center group no-print">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600 group-hover:text-blue-600"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
     </a>
 </body>
 </html>
