@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학급 운영 프로그램 포털</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="top-bar">
+        <div class="date-time" id="date-time">
+            <span id="current-date"></span>
+            <span class="separator">|</span>
+            <span id="current-time"></span>
+        </div>
+    </div>
+
+    <main class="container">
+        <header class="header">
+            <div class="logo-container">
+                <div class="logo-bg">
+                    <i data-lucide="graduation-cap" class="logo-icon"></i>
+                </div>
+                <h1 class="title">우리반 <span class="highlight">스마트 도구함</span></h1>
+            </div>
+            <p class="subtitle">교실의 효율을 높이고 즐거움을 더하는 학급 경영 필수 프로그램 모음입니다.</p>
+        </header>
+
+        <section class="program-grid" id="program-grid">
+            <!-- 자리 바꾸기 프로그램 -->
+            <div class="program-card" onclick="location.href='자리바꾸기.html'">
+                <div class="card-icon-wrapper seating">
+                    <i data-lucide="users"></i>
+                </div>
+                <div class="card-content">
+                    <h2 class="card-title">자리 바꾸기</h2>
+                    <p class="card-description">학생들의 관계를 고려한 과학적인 자리 배치 도구입니다.</p>
+                    <div class="card-footer">
+                        <span class="status-badge">사용 가능</span>
+                        <i data-lucide="chevron-right" class="arrow-icon"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 프로그램 추가 예정 카드 -->
+            <div class="program-card empty">
+                <div class="card-icon-wrapper pending">
+                    <i data-lucide="plus"></i>
+                </div>
+                <div class="card-content">
+                    <h2 class="card-title">프로그램 추가 예정</h2>
+                    <p class="card-description">새로운 유용한 프로그램이 곧 업데이트될 예정입니다.</p>
+                    <div class="card-footer">
+                        <span class="status-badge pending">준비 중</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="main-footer">
+            <p>© 2024 학급 운영 도구함 | 교실 속 즐거운 변화를 꿈꿉니다.</p>
+        </footer>
+    </main>
+
+        <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Update Date and Time
+        function updateDateTime() {
+            const now = new Date();
+            const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' };
+            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+            
+            document.getElementById('current-date').textContent = now.toLocaleDateString('ko-KR', dateOptions);
+            document.getElementById('current-time').textContent = now.toLocaleTimeString('ko-KR', timeOptions);
+        }
+
+        setInterval(updateDateTime, 1000);
+        updateDateTime();
+    </script>
+</body>
+</html>
