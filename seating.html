@@ -60,7 +60,7 @@
       const [fixedSeats, setFixedSeats] = useState({}); 
       const [draggedSeat, setDraggedSeat] = useState(null);
       
-      // 자리 사용 여부 상태 (클릭하여 책상 없애기/커스텀 배열용)
+      // 자리 사용 여부 상태
       const [inactiveSeats, setInactiveSeats] = useState({});
 
       // 커스텀 알림/경고창 상태
@@ -91,8 +91,12 @@
         setInactiveSeats({});
       }, [rows, cols]);
 
-      // 유틸: 이름 정리
+      // ⭐️ 유틸: 화면 출력용 이름 (성별 태그만 지우고 번호는 남김)
+      const displayName = (name) => name ? name.replace(/\(남\)|\(여\)/g, '').trim() : '';
+
+      // 유틸: 로직 매칭용 순수 이름 (번호, 성별 모두 제거)
       const cleanName = (name) => name ? name.replace(/^[0-9]+번?\s*/, '').replace(/\(남\)|\(여\)/g, '').trim() : '';
+      
       const getGender = (name) => {
         if (!name) return null;
         if (name.includes('(남)')) return 'M';
@@ -224,9 +228,11 @@
           let remainingNames = [...uniqueNames];
 
           Object.entries(secretSeats).forEach(([name, pos]) => {
-            if (remainingNames.includes(name) && pos.r < rows && pos.c < cols && !inactiveSeats[`${pos.r}-${pos.c}`] && newGrid[pos.r][pos.c] === null) {
-              newGrid[pos.r][pos.c] = name;
-              remainingNames = remainingNames.filter(n => n !== name);
+            // 로직 매칭을 위해 원본 리스트에서 해당 이름을 찾음
+            const originalName = remainingNames.find(n => cleanName(n) === name);
+            if (originalName && pos.r < rows && pos.c < cols && !inactiveSeats[`${pos.r}-${pos.c}`] && newGrid[pos.r][pos.c] === null) {
+              newGrid[pos.r][pos.c] = originalName;
+              remainingNames = remainingNames.filter(n => n !== originalName);
             }
           });
 
@@ -596,13 +602,24 @@
       const renderRows = printPerspective === 'teacher' ? [...Array(rows)].map((_, i) => rows - 1 - i) : [...Array(rows)].map((_, i) => i);
       const renderCols = printPerspective === 'teacher' ? [...Array(cols)].map((_, i) => cols - 1 - i) : [...Array(cols)].map((_, i) => i);
 
-      const getSeatMarginClass = (vr, vc) => {
+      // ⭐️ 시점에 따른 여백(마진) 로직 수정: 선생님 시점에서는 모둠의 여백도 완벽하게 상하좌우 반전됩니다!
+      const getSeatMarginClass = (r, c) => {
         let classes = "transition-all duration-300 ease-in-out ";
-        if (layoutMode === 'pair') {
-          if (vc % 2 === 1 && vc !== cols - 1) classes += "mr-6 sm:mr-10 ";
-        } else if (layoutMode === 'group') {
-          if (vc % groupCols === groupCols - 1 && vc !== cols - 1) classes += "mr-6 sm:mr-10 ";
-          if (vr % groupRows === groupRows - 1 && vr !== rows - 1) classes += "mb-6 sm:mb-10 ";
+        if (printPerspective === 'normal') {
+          if (layoutMode === 'pair') {
+            if (c % 2 === 1 && c !== cols - 1) classes += "mr-6 sm:mr-10 ";
+          } else if (layoutMode === 'group') {
+            if (c % groupCols === groupCols - 1 && c !== cols - 1) classes += "mr-6 sm:mr-10 ";
+            if (r % groupRows === groupRows - 1 && r !== rows - 1) classes += "mb-6 sm:mb-10 ";
+          }
+        } else {
+          // 선생님 시점 (교탁이 아래) -> 로직상 위쪽과 왼쪽에 있던 간격이 상하좌우 반전됨
+          if (layoutMode === 'pair') {
+            if (c > 0 && (c - 1) % 2 === 1) classes += "mr-6 sm:mr-10 ";
+          } else if (layoutMode === 'group') {
+            if (c > 0 && (c - 1) % groupCols === groupCols - 1) classes += "mr-6 sm:mr-10 ";
+            if (r > 0 && (r - 1) % groupRows === groupRows - 1) classes += "mb-6 sm:mb-10 ";
+          }
         }
         return classes;
       };
@@ -651,7 +668,7 @@
                 </p>
               </div>
 
-              {/* ⭐️ 보는 시점 */}
+              {/* 보는 시점 */}
               <div className="mb-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5"><i className="fa-solid fa-eye"></i> 교탁 보는 시점</h2>
                 <div className="flex gap-2">
@@ -792,7 +809,7 @@
                           w-[4.5rem] h-[3.5rem] sm:w-[5.5rem] sm:h-[4rem] md:w-[6.5rem] md:h-[4.5rem] lg:w-[7.5rem] lg:h-[5.5rem] flex-shrink-0
                           ${isInactive ? 'opacity-30 border-dashed border-gray-300 bg-transparent text-transparent hover:opacity-70 hover:bg-red-50 hover:border-red-300 cursor-pointer' : (studentName ? 'bg-white border-blue-200 shadow-sm hover:border-blue-400 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing' : 'bg-gray-100 border-dashed border-gray-300 text-gray-400 cursor-pointer hover:bg-red-50 hover:border-red-300 hover:text-red-400')}
                           ${isFixed ? 'border-amber-400 bg-amber-50' : ''}
-                          ${getSeatMarginClass(vr, vc)}
+                          ${getSeatMarginClass(r, c)}
                         `}
                         title={isInactive ? "클릭하면 책상 복구됨" : (!studentName ? "클릭하면 책상 없앰 (배정 제외)" : "")}
                       >
@@ -816,7 +833,7 @@
                           {isInactive ? (
                             <span className="text-xl opacity-60 no-print">❌</span> 
                           ) : (
-                            studentName ? cleanName(studentName) : <span className="text-gray-300 text-xs sm:text-sm font-normal">빈 자리</span>
+                            studentName ? displayName(studentName) : <span className="text-gray-300 text-xs sm:text-sm font-normal">빈 자리</span>
                           )}
                         </div>
                         
@@ -860,7 +877,7 @@
                        className="bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg font-bold shadow-sm cursor-grab active:cursor-grabbing text-sm border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
                      >
                        <i className="fa-solid fa-hand-pointer opacity-50"></i>
-                       {cleanName(name)}
+                       {displayName(name)}
                      </div>
                    ))}
                    {waitingList.length === 0 && (
