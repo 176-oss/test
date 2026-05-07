@@ -39,12 +39,24 @@
     ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 
-    /* ⭐️ A4 가로 사이즈 고정 클래스 */
+    /* A4 가로 사이즈 고정 클래스 */
     .a4-landscape {
       width: 1123px;
       min-height: 794px;
       flex-shrink: 0;
       box-sizing: border-box;
+    }
+
+    /* ⭐️ 카운트다운 애니메이션 */
+    @keyframes popIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      30% { transform: scale(1.2); opacity: 1; }
+      50% { transform: scale(1); opacity: 1; }
+      90% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0.8); opacity: 0; }
+    }
+    .animate-count {
+      animation: popIn 1s ease-in-out forwards;
     }
   </style>
 </head>
@@ -82,13 +94,14 @@
       const [isExporting, setIsExporting] = useState(false); 
       const [printPerspective, setPrintPerspective] = useState('normal'); 
 
-      // ⭐️ 하단 안내 문구 관련 상태
+      // 하단 안내 문구 관련 상태
       const [footerNote, setFooterNote] = useState("※ 자리는 랜덤 프로그램을 통해 공정하게 배치되었습니다.");
       const [footerFontSize, setFooterFontSize] = useState("text-sm");
       const [footerFontWeight, setFooterFontWeight] = useState("font-medium");
       
-      // 발표 모드 상태 추가 (학생들에게 보여줄 때 경고창 숨김)
+      // 발표 모드 및 카운트다운 상태
       const [isPresenting, setIsPresenting] = useState(false);
+      const [countdown, setCountdown] = useState(null);
 
       useEffect(() => {
         const initialGrid = Array(rows).fill(null).map(() => Array(cols).fill(null));
@@ -135,8 +148,8 @@
         const skipKeywords = ["번호", "이름", "성별", "비고", "성명", "학번", "남", "여"];
         const layoutItems = rawItems.filter(item => {
           if (skipKeywords.includes(item)) return false;
-          if (/^\d+$/.test(item)) return false; // 숫자로만 된 항목 제외
-          return true; // 이름과 '빈자리', '❌' 등은 통과
+          if (/^\d+$/.test(item)) return false; 
+          return true; 
         });
 
         for (let i = 0; i < layoutItems.length; i += cols) {
@@ -211,7 +224,8 @@
       const assignedNamesOriginal = grid.flat().filter(n => n !== null);
       const waitingList = allNamesOriginal.filter(n => !assignedNamesOriginal.includes(n));
 
-      const handleAssign = () => {
+      // ⭐️ 실제 랜덤 배치를 수행하는 함수 분리 (useSecret 인자 받음)
+      const executeAssign = (useSecret) => {
         let names = inputText.split(/[,\n]/).map(n => n.trim()).filter(n => n !== "");
         const uniqueNames = [...new Set(names)];
         
@@ -226,7 +240,8 @@
         const prevPairs = getPrevPairsList(); 
 
         const secretSeats = {};
-        if (secretSeatsInput.trim()) {
+        // ⭐️ useSecret이 true일 때만 비밀 고정석을 불러옵니다.
+        if (useSecret && secretSeatsInput.trim()) {
           secretSeatsInput.split('\n').forEach(line => {
             const parts = line.split(':');
             if (parts.length >= 2) {
@@ -325,6 +340,33 @@
           } else if (minViolations > 0) {
             showAlert("💡 배치 알림", "모든 학생이 다른 조로 분리되었으나, 일부 학생이 이전 짝꿍이나 기피 대상 근처(대각선 등)에 배치되었습니다.");
           }
+        }
+      };
+
+      // ⭐️ 버튼 클릭 시 카운트다운 및 특수키(Ctrl) 여부 판단
+      const handleAssignClick = (e) => {
+        if (countdown !== null) return; // 카운트다운 중 중복 클릭 방지
+
+        // 발표 모드가 꺼져있으면 무조건 비밀 고정석 작동
+        // 발표 모드 켜져있으면 사용자가 Ctrl(또는 Cmd) 키를 누르고 클릭했을 때만 작동!
+        const useSecret = !isPresenting || e.ctrlKey || e.metaKey;
+
+        if (isPresenting && layoutMode !== 'manual') {
+          let currentCount = 3;
+          setCountdown(currentCount);
+          
+          const timer = setInterval(() => {
+            currentCount--;
+            if (currentCount > 0) {
+              setCountdown(currentCount);
+            } else {
+              clearInterval(timer);
+              setCountdown(null);
+              executeAssign(useSecret);
+            }
+          }, 1000);
+        } else {
+          executeAssign(useSecret);
         }
       };
 
@@ -441,7 +483,6 @@
           setDraggedSeat(null);
         };
 
-        // 발표 모드일 경우 강제로 배치 허용 (알림 숨김)
         if (isPresenting) {
           applyChanges();
         } else {
@@ -616,7 +657,7 @@
       const seatSizeClass = getSeatSizeClass();
 
       return (
-        <div className="h-screen bg-gray-50 flex flex-col md:flex-row text-gray-800 font-sans overflow-hidden">
+        <div className="h-screen bg-gray-50 flex flex-col md:flex-row text-gray-800 font-sans overflow-hidden relative">
           
           <div className="no-print w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col shadow-lg z-10 flex-shrink-0 h-[45vh] md:h-full">
             <div className="p-4 sm:p-5 overflow-y-auto flex-1 flex flex-col">
@@ -816,8 +857,9 @@
               </div>
 
               <div className="flex flex-col gap-1.5 sm:gap-2 mt-auto pt-2 border-t border-gray-100">
+                {/* ⭐️ 버튼에 handleAssignClick 연결 */}
                 <button 
-                  onClick={handleAssign}
+                  onClick={handleAssignClick}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 sm:py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-md text-sm sm:text-base"
                 >
                   <i className="fa-solid fa-shuffle"></i>
@@ -1037,6 +1079,7 @@
                     <label className="text-xs sm:text-sm font-bold text-rose-900 block mb-1.5 sm:mb-2">🤫 비밀 고정석 (학생 몰래 지정)</label>
                     <p className="text-[10px] sm:text-xs text-rose-700 mb-2 sm:mb-3 leading-relaxed">
                       화면에는 표시되지 않지만 랜덤 배치 시 지정된 자리로 <b>마치 우연히 뽑힌 것처럼</b> 들어갑니다.<br/>
+                      💡 <b>발표 모드 팁:</b> 발표 모드에서는 <kbd className="bg-rose-100 px-1 rounded font-mono">Ctrl</kbd> 키(Mac은 <kbd className="bg-rose-100 px-1 rounded font-mono">Cmd</kbd>)를 누른 채로 <b>[자리 랜덤 배치]</b>를 클릭할 때만 적용됩니다! 평소엔 누르지 말고 여러 번 섞는 척 연기하세요 😉<br/>
                       입력 형식: <code>이름: 행-열</code> (예: <code>홍길동: 1-2</code>)
                     </p>
                     <textarea
@@ -1068,11 +1111,42 @@
                       </button>
                     </div>
                     
-                    <p className="text-xs sm:text-sm text-indigo-800 mb-3 leading-relaxed font-medium">
-                      💡 <b>가장 정확하고 빠른 방법! (오류 0%)</b><br/>
-                      이전 배치에서 저장해둔 <b>텍스트 표</b>나 <b>한글/엑셀</b> 파일의 표 전체를 마우스로 드래그해서 <b>복사(Ctrl+C)</b>한 뒤, 아래 빈칸에 <b>붙여넣기(Ctrl+V)</b> 하세요.<br/>
-                      <span className="text-indigo-600 text-[10px] sm:text-xs">(※ 하단의 [인쇄/저장] 버튼을 눌러 <b>'텍스트 복사'</b> 기능을 사용해 메모장에 보관해두시면 아주 편리합니다!)</span>
-                    </p>
+                    <div className="text-xs sm:text-sm text-indigo-800 mb-3 leading-relaxed bg-white/60 p-3 rounded-lg border border-indigo-200">
+                      <p className="font-bold mb-1">💡 이용 방법 2가지 (택 1)</p>
+                      <ul className="space-y-1 mb-3 list-disc list-inside pl-1 text-[11px] sm:text-xs">
+                        <li>엑셀 파일의 표를 복사 붙여넣기 (공백은 '빈자리'라고 작성)</li>
+                        <li>이미지나 pdf는 제미나이나 gpt에게 아래 프롬포트 입력해서 추출하기</li>
+                      </ul>
+                      <div className="relative">
+                        <textarea
+                          readOnly
+                          className="w-full bg-indigo-50/50 border border-indigo-200 rounded p-2 text-[10px] sm:text-xs font-mono text-slate-600 resize-none outline-none focus:ring-1 focus:ring-indigo-400"
+                          rows="8"
+                          value={`첨부한 파일(자리배치도)을 읽고, 텍스트 형태의 표로 변환해줘.\n[출력 규칙]\n\n1. 이름만 추출하고, 이름 사이에는 '탭(Tab)' 공백을 넣어줘.\n2. 실제 자리 배치 모양 그대로 행과 열을 맞춰서 작성해줘.\n3. 이름 외에 번호나 불필요한 기호는 모두 제거해줘.\n4. 빈자리가 있다면 '빈자리'라고 표시해줘.`}
+                        />
+                        <button 
+                          onClick={(e) => {
+                            const text = `첨부한 파일(자리배치도)을 읽고, 텍스트 형태의 표로 변환해줘.\n[출력 규칙]\n\n1. 이름만 추출하고, 이름 사이에는 '탭(Tab)' 공백을 넣어줘.\n2. 실제 자리 배치 모양 그대로 행과 열을 맞춰서 작성해줘.\n3. 이름 외에 번호나 불필요한 기호는 모두 제거해줘.\n4. 빈자리가 있다면 '빈자리'라고 표시해줘.`;
+                            const textArea = document.createElement("textarea");
+                            textArea.value = text;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            try {
+                              document.execCommand('copy');
+                              const btn = e.currentTarget;
+                              const originalHtml = btn.innerHTML;
+                              btn.innerHTML = '<span class="text-emerald-600 font-bold">복사완료!</span>';
+                              setTimeout(() => btn.innerHTML = originalHtml, 2000);
+                            } catch (err) {}
+                            document.body.removeChild(textArea);
+                          }}
+                          className="absolute top-1 right-1 bg-white hover:bg-indigo-100 text-indigo-600 px-2 py-1 rounded text-[10px] font-bold transition-colors border border-indigo-200 shadow-sm"
+                        >
+                          프롬프트 복사
+                        </button>
+                      </div>
+                    </div>
+
                     <textarea
                       className="w-full border-2 border-indigo-300 rounded-lg p-3 text-sm h-28 sm:h-32 resize-none focus:ring-2 focus:ring-indigo-500 outline-none bg-white placeholder-indigo-300 font-mono"
                       placeholder="여기를 클릭하고 표를 붙여넣기(Ctrl+V) 하세요!"
@@ -1080,6 +1154,22 @@
                       onChange={(e) => setPrevLayoutText(e.target.value)}
                     />
                   </div>
+
+                  {layoutMode === 'pair' && (
+                    <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 p-2 sm:p-3 rounded-lg border border-gray-200">
+                      <input 
+                        type="checkbox" 
+                        id="gender-pair"
+                        checked={genderPairing}
+                        onChange={(e) => setGenderPairing(e.target.checked)}
+                        className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <label htmlFor="gender-pair" className="text-xs sm:text-sm text-gray-800 cursor-pointer font-medium leading-tight">
+                        남녀 짝꿍 우선 배치<br/>
+                        <span className="text-[9px] sm:text-xs text-gray-500 font-normal">(명단 이름 끝에 '남', '여' 표기. 괄호 생략 가능)</span>
+                      </label>
+                    </div>
+                  )}
 
                   <div className="pt-3 sm:pt-4 border-t border-gray-100">
                     <button 
@@ -1186,6 +1276,15 @@
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ⭐️ 카운트다운 오버레이 */}
+          {countdown !== null && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm no-print">
+              <div key={countdown} className="text-[10rem] sm:text-[15rem] md:text-[20rem] font-black text-white drop-shadow-2xl animate-count">
+                {countdown}
               </div>
             </div>
           )}
