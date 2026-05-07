@@ -38,6 +38,14 @@
     ::-webkit-scrollbar-track { background: #f1f1f1; }
     ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+    /* ⭐️ A4 가로 사이즈 고정 클래스 */
+    .a4-landscape {
+      width: 1123px;
+      min-height: 794px;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +82,14 @@
       const [isExporting, setIsExporting] = useState(false); 
       const [printPerspective, setPrintPerspective] = useState('normal'); 
 
+      // ⭐️ 하단 안내 문구 관련 상태
+      const [footerNote, setFooterNote] = useState("※ 자리는 랜덤 프로그램을 통해 공정하게 배치되었습니다.");
+      const [footerFontSize, setFooterFontSize] = useState("text-sm");
+      const [footerFontWeight, setFooterFontWeight] = useState("font-medium");
+      
+      // 발표 모드 상태 추가 (학생들에게 보여줄 때 경고창 숨김)
+      const [isPresenting, setIsPresenting] = useState(false);
+
       useEffect(() => {
         const initialGrid = Array(rows).fill(null).map(() => Array(cols).fill(null));
         setGrid(initialGrid);
@@ -107,18 +123,15 @@
           .filter(pair => pair.length >= 2);
       };
 
-      // ⭐️ 한글/엑셀에서 복사해온 표 데이터(탭, 줄바꿈 구분)를 분석하는 핵심 로직
       const getPrevPairsList = () => {
         if (!prevLayoutText.trim()) return [];
         const pairs = [];
         let parsedRows = [];
 
-        // 1. 모든 구분자(탭, 줄바꿈, 쉼표)를 기준으로 쪼개어 배열화
         const rawItems = prevLayoutText.split(/[\t\n\r,]+/)
           .map(item => cleanName(item.trim()))
           .filter(item => item !== "");
 
-        // 2. 불필요한 표 헤더 및 번호 필터링
         const skipKeywords = ["번호", "이름", "성별", "비고", "성명", "학번", "남", "여"];
         const layoutItems = rawItems.filter(item => {
           if (skipKeywords.includes(item)) return false;
@@ -126,12 +139,10 @@
           return true; // 이름과 '빈자리', '❌' 등은 통과
         });
 
-        // 3. ⭐️ 현재 설정된 열(cols) 개수에 맞춰 2차원 배열(바둑판)로 재조립 (한글 표 세로 나열 현상 해결)
         for (let i = 0; i < layoutItems.length; i += cols) {
           parsedRows.push(layoutItems.slice(i, i + cols));
         }
 
-        // 4. 재조립된 표에서 인접(상하좌우) 쌍 추출
         const emptyMarkers = ['빈자리', '❌', '제외'];
         for (let i = 0; i < parsedRows.length; i++) {
           for (let j = 0; j < parsedRows[i].length; j++) {
@@ -305,12 +316,15 @@
 
         setGrid(bestGrid);
         
-        if (minViolations >= 10000) {
-          showAlert("⚠️ 배치 알림", "공간이 부족하여 '강제 기피 대상'을 다른 조로 완벽히 분리하지 못했습니다. 배치 결과를 확인해 주세요.");
-        } else if (minViolations >= 500) {
-          showAlert("💡 배치 알림", "강제 기피 대상은 성공적으로 분리되었으나, 자리가 부족해 '이전 짝꿍/모둠'이었던 학생 일부가 다시 같은 조에 배치되었습니다.");
-        } else if (minViolations > 0) {
-          showAlert("💡 배치 알림", "모든 학생이 다른 조로 분리되었으나, 일부 학생이 이전 짝꿍이나 기피 대상 근처(대각선 등)에 배치되었습니다.");
+        // 발표 모드일 경우 경고창 생략
+        if (!isPresenting) {
+          if (minViolations >= 10000) {
+            showAlert("⚠️ 배치 알림", "공간이 부족하여 '강제 기피 대상'을 다른 조로 완벽히 분리하지 못했습니다. 배치 결과를 확인해 주세요.");
+          } else if (minViolations >= 500) {
+            showAlert("💡 배치 알림", "강제 기피 대상은 성공적으로 분리되었으나, 자리가 부족해 '이전 짝꿍/모둠'이었던 학생 일부가 다시 같은 조에 배치되었습니다.");
+          } else if (minViolations > 0) {
+            showAlert("💡 배치 알림", "모든 학생이 다른 조로 분리되었으나, 일부 학생이 이전 짝꿍이나 기피 대상 근처(대각선 등)에 배치되었습니다.");
+          }
         }
       };
 
@@ -427,22 +441,27 @@
           setDraggedSeat(null);
         };
 
-        if (hasAvoidConflict) {
-          showConfirm(
-            "⚠️ 배치 불가 주의!", 
-            "해당 위치로 이동하면 [강제 기피 대상]과 같은 조가 되거나 근처에 인접하게 됩니다.\n그래도 배치를 강행하시겠습니까?", 
-            applyChanges,
-            () => setDraggedSeat(null)
-          );
-        } else if (hasPrevConflict) {
-          showConfirm(
-            "💡 이전 자리 중복", 
-            "해당 위치로 이동하면 [이전 자리에서 인접했던 학생]과 다시 같은 조가 됩니다.\n이대로 배치하시겠습니까?", 
-            applyChanges,
-            () => setDraggedSeat(null)
-          );
-        } else {
+        // 발표 모드일 경우 강제로 배치 허용 (알림 숨김)
+        if (isPresenting) {
           applyChanges();
+        } else {
+          if (hasAvoidConflict) {
+            showConfirm(
+              "⚠️ 배치 불가 주의!", 
+              "해당 위치로 이동하면 [강제 기피 대상]과 같은 조가 되거나 근처에 인접하게 됩니다.\n그래도 배치를 강행하시겠습니까?", 
+              applyChanges,
+              () => setDraggedSeat(null)
+            );
+          } else if (hasPrevConflict) {
+            showConfirm(
+              "💡 이전 자리 중복", 
+              "해당 위치로 이동하면 [이전 자리에서 인접했던 학생]과 다시 같은 조가 됩니다.\n이대로 배치하시겠습니까?", 
+              applyChanges,
+              () => setDraggedSeat(null)
+            );
+          } else {
+            applyChanges();
+          }
         }
       };
 
@@ -467,7 +486,7 @@
           row.map((name, c) => name ? cleanName(name) : (inactiveSeats[`${r}-${c}`] ? "제외" : "빈자리")).join('\t')
         ).join('\n');
         setPrevLayoutText(text);
-        showAlert("적용 완료", "현재 화면의 배치가 '이전 자리 배치표'로 텍스트 칸에 자동 입력되었습니다.\n이제 섞기를 누르면 지금 옆에 있는 친구와 찢어지게 배치됩니다!");
+        showAlert("적용 완료", "현재 화면의 배치가 '이전 자리 배치표'로 자동 입력되었습니다.\n이제 섞기를 누르면 지금 옆에 있는 친구와 찢어지게 배치됩니다!");
       };
 
       const handlePrintClick = () => {
@@ -539,32 +558,6 @@
           setIsExporting(false);
         }
       };
-      
-      // ⭐️ 클립보드에 텍스트 표 형태로 복사 (다음 번 배치를 위한 백업용)
-      const copyGridToClipboard = () => {
-        if (grid.every(row => row.every(seat => seat === null))) { 
-          showAlert("복사 실패", "배치된 자리가 없습니다."); 
-          return; 
-        }
-        const text = grid.map((row, r) => 
-          row.map((name, c) => name ? cleanName(name) : (inactiveSeats[`${r}-${c}`] ? "제외" : "빈자리")).join('\t')
-        ).join('\n');
-        
-        // 구형 브라우저 및 iFrame 환경 호환을 위한 안전한 복사 방식
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            setModal(prev => ({...prev, isOpen: false}));
-            showAlert("복사 완료!", "현재 자리 배치가 텍스트 표 형태로 복사되었습니다.\n\n이 텍스트를 메모장 등에 저장해두셨다가, 다음번 자리 배치 시 [이전 자리 배치표] 입력칸에 그대로 붙여넣기(Ctrl+V) 하시면 됩니다.");
-        } catch (err) {
-            console.error('Clipboard copy failed:', err);
-            showAlert("복사 실패", "이 브라우저 환경에서는 클립보드 복사를 지원하지 않습니다.");
-        }
-        document.body.removeChild(textArea);
-      };
 
       const saveCurrentLayout = () => {
         if (grid.every(row => row.every(seat => seat === null))) { 
@@ -598,21 +591,29 @@
         let classes = "transition-all duration-300 ease-in-out ";
         if (printPerspective === 'normal') {
           if (layoutMode === 'pair') {
-            if (c % 2 === 1 && c !== cols - 1) classes += "mr-2 sm:mr-6 lg:mr-10 ";
+            if (c % 2 === 1 && c !== cols - 1) classes += "mr-2 sm:mr-5 lg:mr-8 ";
           } else if (layoutMode === 'group') {
-            if (c % groupCols === groupCols - 1 && c !== cols - 1) classes += "mr-2 sm:mr-6 lg:mr-10 ";
-            if (r % groupRows === groupRows - 1 && r !== rows - 1) classes += "mb-2 sm:mb-6 lg:mb-10 ";
+            if (c % groupCols === groupCols - 1 && c !== cols - 1) classes += "mr-2 sm:mr-5 lg:mr-8 ";
+            if (r % groupRows === groupRows - 1 && r !== rows - 1) classes += "mb-2 sm:mb-5 lg:mb-8 ";
           }
         } else {
           if (layoutMode === 'pair') {
-            if (c > 0 && (c - 1) % 2 === 1) classes += "mr-2 sm:mr-6 lg:mr-10 ";
+            if (c > 0 && (c - 1) % 2 === 1) classes += "mr-2 sm:mr-5 lg:mr-8 ";
           } else if (layoutMode === 'group') {
-            if (c > 0 && (c - 1) % groupCols === groupCols - 1) classes += "mr-2 sm:mr-6 lg:mr-10 ";
-            if (r > 0 && (r - 1) % groupRows === groupRows - 1) classes += "mb-2 sm:mb-6 lg:mb-10 ";
+            if (c > 0 && (c - 1) % groupCols === groupCols - 1) classes += "mr-2 sm:mr-5 lg:mr-8 ";
+            if (r > 0 && (r - 1) % groupRows === groupRows - 1) classes += "mb-2 sm:mb-5 lg:mb-8 ";
           }
         }
         return classes;
       };
+
+      const getSeatSizeClass = () => {
+        if (cols >= 9) return "w-[3rem] h-[2.5rem] sm:w-[3.5rem] sm:h-[3rem] md:w-[4rem] md:h-[3.5rem] lg:w-[4.5rem] lg:h-[3.5rem]";
+        if (cols >= 7) return "w-[3.5rem] h-[3rem] sm:w-[4.5rem] sm:h-[3.5rem] md:w-[5rem] md:h-[4rem] lg:w-[5.5rem] lg:h-[4.5rem]";
+        if (layoutMode !== 'normal') return "w-[4rem] h-[3.5rem] sm:w-[4.5rem] sm:h-[4rem] md:w-[5.5rem] md:h-[4.5rem] lg:w-[6.5rem] lg:h-[5rem]";
+        return "w-[4.5rem] h-[4rem] sm:w-[5.5rem] sm:h-[4.5rem] md:w-[6.5rem] md:h-[5rem] lg:w-[7.5rem] lg:h-[5.5rem]";
+      };
+      const seatSizeClass = getSeatSizeClass();
 
       return (
         <div className="h-screen bg-gray-50 flex flex-col md:flex-row text-gray-800 font-sans overflow-hidden">
@@ -620,18 +621,29 @@
           <div className="no-print w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col shadow-lg z-10 flex-shrink-0 h-[45vh] md:h-full">
             <div className="p-4 sm:p-5 overflow-y-auto flex-1 flex flex-col">
               
-              <div 
-                className="flex items-center gap-2 mb-4 sm:mb-6 cursor-pointer group w-fit"
-                onClick={() => setShowAdvanced(true)}
-                title="고급 설정 열기 (선생님 전용)"
-              >
-                <div className="p-1.5 bg-gray-100 text-gray-600 rounded-lg group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors shadow-sm">
-                  <i className="fa-solid fa-users text-lg sm:text-xl"></i>
+              <div className="flex justify-between items-start mb-4 sm:mb-6 w-full border-b border-gray-100 pb-3">
+                <div 
+                  className={`flex items-center gap-2 w-fit ${isPresenting ? 'cursor-default opacity-80' : 'cursor-pointer group'}`}
+                  onClick={() => { if (!isPresenting) setShowAdvanced(true); }}
+                  title={isPresenting ? "발표 모드 중에는 고급 설정을 열 수 없습니다." : "고급 설정 열기 (선생님 전용)"}
+                >
+                  <div className={`p-1.5 rounded-lg transition-colors shadow-sm ${isPresenting ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-600 group-hover:bg-indigo-100 group-hover:text-indigo-600'}`}>
+                    <i className="fa-solid fa-users text-lg sm:text-xl"></i>
+                  </div>
+                  <h1 className={`text-base sm:text-lg font-extrabold tracking-tight transition-colors ${isPresenting ? 'text-gray-900' : 'text-gray-900 group-hover:text-indigo-600'}`}>
+                    자리배치 설정
+                  </h1>
+                  {!isPresenting && <i className="fa-solid fa-gear text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>}
                 </div>
-                <h1 className="text-lg sm:text-xl font-extrabold text-gray-900 group-hover:text-indigo-600 transition-colors tracking-tight">
-                  스마트 자리배치
-                </h1>
-                <i className="fa-solid fa-gear text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
+                
+                <button
+                  onClick={() => setIsPresenting(!isPresenting)}
+                  className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all shadow-sm border ${isPresenting ? 'bg-rose-50 text-rose-600 border-rose-200 ring-2 ring-rose-100' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                  title="학생들에게 화면을 보여줄 때 켜세요. (비밀 경고 숨김)"
+                >
+                  <i className={`fa-solid ${isPresenting ? 'fa-tv' : 'fa-desktop'} mb-0.5 text-sm`}></i>
+                  {isPresenting ? '발표 모드 ON' : '발표 모드 OFF'}
+                </button>
               </div>
 
               <div className="mb-4 bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100">
@@ -652,7 +664,7 @@
                   </div>
                 </div>
                 <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-200">
-                  💡 <b>Tip:</b> 오른쪽 화면에서 빈자리를 마우스로 클릭하면 <b>'❌ (사용 불가)'</b>로 만들 수 있습니다. 이를 활용해 특별한 배열을 만들어 보세요!
+                  💡 <b>Tip:</b> 오른쪽 화면에서 빈자리를 마우스로 클릭하면 <b>'❌ (사용 불가)'</b>로 만들 수 있습니다.
                 </p>
               </div>
 
@@ -715,7 +727,7 @@
                 )}
               </div>
 
-              <div className="mb-6 flex-1 flex flex-col min-h-[160px]">
+              <div className="mb-4 flex-1 flex flex-col min-h-[160px]">
                 <div className="flex justify-between items-end mb-2">
                   <h2 className="text-sm font-semibold text-gray-700">학생 명단</h2>
                   <div className="flex gap-2 items-center">
@@ -735,17 +747,71 @@
                   onChange={(e) => setInputText(e.target.value)}
                 />
                 
-                <div className="flex items-center gap-2 mt-2 pt-1">
-                  <input 
-                    type="checkbox" 
-                    id="use-gender-color"
-                    checked={useGenderColor}
-                    onChange={(e) => setUseGenderColor(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <label htmlFor="use-gender-color" className="text-[11px] text-gray-600 cursor-pointer font-bold">
-                    남/여 색상으로 구분하기 (명단 이름 끝에 '남', '여' 표기. 괄호 생략 가능)
-                  </label>
+                {/* ⭐️ 명단 하단 부가 기능 옵션 (색상 구분 및 남녀 짝꿍 우선 배치) */}
+                <div className="flex flex-col gap-2 mt-2 pt-1 border-t border-gray-100">
+                  <div className="flex items-center gap-2 mt-1">
+                    <input 
+                      type="checkbox" 
+                      id="use-gender-color"
+                      checked={useGenderColor}
+                      onChange={(e) => setUseGenderColor(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <label htmlFor="use-gender-color" className="text-[11px] sm:text-xs text-gray-600 cursor-pointer font-bold">
+                      남/여 색상으로 구분하기
+                    </label>
+                  </div>
+                  <div className={`flex items-center gap-2 ${layoutMode !== 'pair' ? 'opacity-50' : ''}`}>
+                    <input 
+                      type="checkbox" 
+                      id="gender-pair"
+                      checked={genderPairing}
+                      onChange={(e) => setGenderPairing(e.target.checked)}
+                      disabled={layoutMode !== 'pair'}
+                      className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    <label htmlFor="gender-pair" className={`text-[11px] sm:text-xs text-gray-600 font-bold ${layoutMode !== 'pair' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                      남녀 짝꿍 우선 배치 (짝꿍 모드 전용)
+                    </label>
+                  </div>
+                  <p className="text-[9px] text-gray-400 font-normal leading-tight">
+                    * 두 기능 모두 명단 이름 끝에 '남', '여' 표기가 있어야 합니다. (괄호 생략 가능)
+                  </p>
+                </div>
+              </div>
+
+              {/* ⭐️ 안내 문구 입력칸 (글자 크기, 굵기 설정 추가) */}
+              <div className="mb-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-2">하단 안내 문구</h2>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="배치도 하단에 표시될 문구를 입력하세요"
+                  value={footerNote}
+                  onChange={(e) => setFooterNote(e.target.value)}
+                />
+                <div className="flex gap-2 mt-2">
+                  <select 
+                    value={footerFontSize} 
+                    onChange={e => setFooterFontSize(e.target.value)} 
+                    className="flex-1 border border-gray-300 rounded p-1.5 text-[11px] sm:text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-600"
+                  >
+                    <option value="text-xs">글자: 작게</option>
+                    <option value="text-sm">글자: 보통</option>
+                    <option value="text-base">글자: 조금 크게</option>
+                    <option value="text-lg">글자: 아주 크게</option>
+                    <option value="text-xl">글자: 최대</option>
+                  </select>
+                  <select 
+                    value={footerFontWeight} 
+                    onChange={e => setFooterFontWeight(e.target.value)} 
+                    className="flex-1 border border-gray-300 rounded p-1.5 text-[11px] sm:text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-600"
+                  >
+                    <option value="font-normal">굵기: 얇게</option>
+                    <option value="font-medium">굵기: 보통</option>
+                    <option value="font-bold">굵기: 굵게</option>
+                    <option value="font-extrabold">굵기: 아주 굵게</option>
+                  </select>
                 </div>
               </div>
 
@@ -777,125 +843,136 @@
 
           <div className="flex-1 flex flex-col items-center p-4 md:p-8 overflow-auto bg-gray-200 relative">
 
-            <div id="capture-area" className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 lg:gap-10 bg-white p-6 md:p-10 rounded-3xl shadow-sm min-w-max w-fit mx-auto border border-gray-100 mb-8 transition-all">
+            <div id="capture-area" className="flex flex-col bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-gray-100 mb-8 transition-all a4-landscape mx-auto relative flex-shrink-0">
               
-              <div className="flex flex-col items-center">
-                {printPerspective === 'normal' && (
-                  <div className="w-full flex justify-center mb-8 sm:mb-12">
-                    <div className="bg-gray-800 text-white px-16 py-3 rounded-b-3xl shadow-lg text-lg font-bold tracking-widest border-t-4 border-gray-600 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-white opacity-10 w-full h-1/2 rounded-b-full"></div>
-                      교 탁
+              <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 lg:gap-10 w-full flex-grow">
+                <div className="flex flex-col items-center">
+                  {printPerspective === 'normal' && (
+                    <div className="w-full flex justify-center mb-8 sm:mb-12">
+                      <div className="bg-gray-800 text-white px-16 py-3 rounded-b-3xl shadow-lg text-lg font-bold tracking-widest border-t-4 border-gray-600 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-white opacity-10 w-full h-1/2 rounded-b-full"></div>
+                        교 탁
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div 
-                  className="seat-grid inline-grid gap-2 sm:gap-3" 
-                  style={{ gridTemplateColumns: `repeat(${cols}, max-content)` }} 
-                >
-                  {renderRows.map((r, vr) => (
-                    renderCols.map((c, vc) => {
-                      const studentName = grid[r] && grid[r][c] ? grid[r][c] : null;
-                      const isFixed = studentName && fixedSeats[studentName] && fixedSeats[studentName].r === r && fixedSeats[studentName].c === c;
-                      const isInactive = inactiveSeats[`${r}-${c}`]; 
-                      
-                      const { number, name } = parseStudentName(studentName);
-                      const gender = getGender(studentName);
-                      
-                      let activeSeatClass = 'bg-gray-100 border-dashed border-gray-300 text-gray-400 cursor-pointer hover:bg-red-50 hover:border-red-300 hover:text-red-400';
-                      if (studentName) {
-                        if (isFixed) {
-                           activeSeatClass = 'border-amber-400 bg-amber-50 text-gray-900 shadow-sm hover:border-amber-500 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
-                        } else if (useGenderColor && gender === 'M') {
-                           activeSeatClass = 'bg-blue-50 border-blue-300 text-blue-900 shadow-sm hover:border-blue-400 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
-                        } else if (useGenderColor && gender === 'F') {
-                           activeSeatClass = 'bg-pink-50 border-pink-300 text-pink-900 shadow-sm hover:border-pink-400 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
-                        } else {
-                           activeSeatClass = 'bg-white border-blue-200 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
+                  <div 
+                    className="seat-grid inline-grid gap-2 sm:gap-3" 
+                    style={{ gridTemplateColumns: `repeat(${cols}, max-content)` }} 
+                  >
+                    {renderRows.map((r, vr) => (
+                      renderCols.map((c, vc) => {
+                        const studentName = grid[r] && grid[r][c] ? grid[r][c] : null;
+                        const isFixed = studentName && fixedSeats[studentName] && fixedSeats[studentName].r === r && fixedSeats[studentName].c === c;
+                        const isInactive = inactiveSeats[`${r}-${c}`]; 
+                        
+                        const { number, name } = parseStudentName(studentName);
+                        const gender = getGender(studentName);
+                        
+                        let activeSeatClass = 'bg-gray-100 border-dashed border-gray-300 text-gray-400 cursor-pointer hover:bg-red-50 hover:border-red-300 hover:text-red-400';
+                        if (studentName) {
+                          if (isFixed) {
+                             activeSeatClass = 'border-amber-400 bg-amber-50 text-gray-900 shadow-sm hover:border-amber-500 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
+                          } else if (useGenderColor && gender === 'M') {
+                             activeSeatClass = 'bg-blue-50 border-blue-300 text-blue-900 shadow-sm hover:border-blue-400 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
+                          } else if (useGenderColor && gender === 'F') {
+                             activeSeatClass = 'bg-pink-50 border-pink-300 text-pink-900 shadow-sm hover:border-pink-400 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
+                          } else {
+                             activeSeatClass = 'bg-white border-blue-200 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md hover:-translate-y-1 cursor-grab active:cursor-grabbing';
+                          }
                         }
-                      }
-                      
-                      return (
-                        <div 
-                          key={`${r}-${c}`}
-                          draggable={!isInactive && !!studentName}
-                          onDragStart={(e) => onDragStartFromGrid(e, r, c, studentName)}
-                          onDragOver={(e) => onDragOverGrid(e, r, c)}
-                          onDrop={(e) => onDropToGrid(e, r, c)}
-                          onClick={() => toggleInactive(r, c)} 
-                          className={`
-                            seat-box relative flex flex-col items-center justify-center rounded-xl border-2 transition-all p-2
-                            w-[4.5rem] h-[4rem] sm:w-[5.5rem] sm:h-[4.5rem] md:w-[6.5rem] md:h-[5rem] lg:w-[8rem] lg:h-[6rem] flex-shrink-0
-                            ${isInactive ? 'opacity-30 border-dashed border-gray-300 bg-transparent text-transparent hover:opacity-70 hover:bg-red-50 hover:border-red-300 cursor-pointer' : activeSeatClass}
-                            ${getSeatMarginClass(r, c)}
-                          `}
-                          title={isInactive ? "클릭하면 책상 복구됨" : (!studentName ? "클릭하면 책상 없앰 (배정 제외)" : "")}
-                        >
-                          {!isInactive && (
-                            <span className="absolute top-1 left-2 text-[9px] sm:text-[10px] text-gray-400 no-print select-none">
-                              {r+1}-{c+1}
-                            </span>
-                          )}
-
-                          {!isInactive && studentName && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); toggleFixed(r, c, studentName); }}
-                              className={`absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 transition-colors no-print ${isFixed ? 'text-amber-600 hover:bg-amber-100' : 'text-gray-300 hover:text-gray-600'}`}
-                              title={isFixed ? "고정 해제" : "자리 고정"}
-                            >
-                              {isFixed ? <i className="fa-solid fa-thumbtack text-sm sm:text-base"></i> : <i className="fa-solid fa-thumbtack fa-rotate-90 opacity-50 text-xs sm:text-sm"></i>}
-                            </button>
-                          )}
-
-                          <div className="font-bold text-center px-1 select-none w-full flex flex-col items-center justify-center gap-0.5" style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}>
-                            {isInactive ? (
-                              <span className="text-xl opacity-60 no-print">❌</span> 
-                            ) : (
-                              studentName ? (
-                                <>
-                                  {number && <span className="text-xs sm:text-sm md:text-[15px] font-bold opacity-75">{number}</span>}
-                                  <span style={{ fontSize: 'clamp(1rem, 1.8vw, 1.5rem)', lineHeight: '1.2' }}>{name}</span>
-                                </>
-                              ) : <span className="text-gray-300 text-xs sm:text-sm font-normal">빈 자리</span>
+                        
+                        return (
+                          <div 
+                            key={`${r}-${c}`}
+                            draggable={!isInactive && !!studentName}
+                            onDragStart={(e) => onDragStartFromGrid(e, r, c, studentName)}
+                            onDragOver={(e) => onDragOverGrid(e, r, c)}
+                            onDrop={(e) => onDropToGrid(e, r, c)}
+                            onClick={() => toggleInactive(r, c)} 
+                            className={`
+                              seat-box relative flex flex-col items-center justify-center rounded-xl border-2 transition-all p-2 flex-shrink-0
+                              ${seatSizeClass}
+                              ${isInactive ? 'opacity-30 border-dashed border-gray-300 bg-transparent text-transparent hover:opacity-70 hover:bg-red-50 hover:border-red-300 cursor-pointer' : activeSeatClass}
+                              ${getSeatMarginClass(r, c)}
+                            `}
+                            title={isInactive ? "클릭하면 책상 복구됨" : (!studentName ? "클릭하면 책상 없앰 (배정 제외)" : "")}
+                          >
+                            {!isInactive && (
+                              <span className="absolute top-1 left-2 text-[9px] sm:text-[10px] text-gray-400 no-print select-none">
+                                {r+1}-{c+1}
+                              </span>
                             )}
+
+                            {!isInactive && studentName && !isPresenting && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); toggleFixed(r, c, studentName); }}
+                                className={`absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 transition-colors no-print ${isFixed ? 'text-amber-600 hover:bg-amber-100' : 'text-gray-300 hover:text-gray-600'}`}
+                                title={isFixed ? "고정 해제" : "자리 고정"}
+                              >
+                                {isFixed ? <i className="fa-solid fa-thumbtack text-sm sm:text-base"></i> : <i className="fa-solid fa-thumbtack fa-rotate-90 opacity-50 text-xs sm:text-sm"></i>}
+                              </button>
+                            )}
+
+                            <div className="font-bold text-center px-1 select-none w-full flex flex-col items-center justify-center gap-0.5" style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}>
+                              {isInactive ? (
+                                <span className="text-xl opacity-60 no-print">❌</span> 
+                              ) : (
+                                studentName ? (
+                                  <>
+                                    {number && <span className="text-xs sm:text-sm md:text-[15px] font-bold opacity-75">{number}</span>}
+                                    <span style={{ fontSize: cols >= 7 ? 'clamp(0.7rem, 1.2vw, 1rem)' : (layoutMode !== 'normal' ? 'clamp(0.85rem, 1.5vw, 1.2rem)' : 'clamp(1rem, 1.8vw, 1.5rem)'), lineHeight: '1.2' }}>{name}</span>
+                                  </>
+                                ) : <span className="text-gray-300 text-[10px] sm:text-xs md:text-sm font-normal">빈 자리</span>
+                              )}
+                            </div>
+                            
+                            {isFixed && !isInactive && !isPresenting && <div className="print-only hidden absolute bottom-1 right-1 text-[10px] text-gray-500">📌</div>}
                           </div>
-                          
-                          {isFixed && !isInactive && <div className="print-only hidden absolute bottom-1 right-1 text-[10px] text-gray-500">📌</div>}
-                        </div>
-                      );
-                    })
-                  ))}
+                        );
+                      })
+                    ))}
+                  </div>
+
+                  {printPerspective === 'teacher' && (
+                    <div className="w-full flex justify-center mt-8 sm:mt-12">
+                      <div className="bg-gray-800 text-white px-16 py-3 rounded-t-3xl shadow-lg text-lg font-bold tracking-widest border-b-4 border-gray-600 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-white opacity-10 w-full h-1/2 rounded-t-full top-0"></div>
+                        교 탁
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {printPerspective === 'teacher' && (
-                  <div className="w-full flex justify-center mt-8 sm:mt-12">
-                    <div className="bg-gray-800 text-white px-16 py-3 rounded-t-3xl shadow-lg text-lg font-bold tracking-widest border-b-4 border-gray-600 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-white opacity-10 w-full h-1/2 rounded-t-full top-0"></div>
-                      교 탁
+                {showRoster && allNamesOriginal.length > 0 && (
+                  <div className="flex flex-col border-2 border-gray-800 rounded-xl min-w-[220px] bg-white shadow-sm overflow-hidden h-fit">
+                    <div className="bg-gray-800 text-white px-5 py-3">
+                      <h3 className="text-center font-bold text-base tracking-widest m-0">
+                        학 급 명 단
+                      </h3>
+                    </div>
+                    <div className="p-0 border-t border-gray-800">
+                      <div className={`grid ${allNamesOriginal.length > 20 ? 'grid-cols-2' : 'grid-cols-1'} bg-gray-300 gap-px`}>
+                        {allNamesOriginal.map((name, idx) => {
+                          const gender = getGender(name);
+                          const bgColor = useGenderColor ? (gender === 'M' ? 'bg-blue-50 text-blue-900' : gender === 'F' ? 'bg-pink-50 text-pink-900' : 'bg-white text-gray-800') : 'bg-white text-gray-800';
+                          return (
+                            <div key={idx} className={`text-sm font-semibold px-4 py-2.5 flex items-center justify-center text-center ${bgColor}`}>
+                              {displayName(name)}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {showRoster && allNamesOriginal.length > 0 && (
-                <div className="flex flex-col border-2 border-gray-800 rounded-xl min-w-[220px] bg-white shadow-sm overflow-hidden h-fit">
-                  <div className="bg-gray-800 text-white px-5 py-3">
-                    <h3 className="text-center font-bold text-base tracking-widest m-0">
-                      학 급 명 단
-                    </h3>
-                  </div>
-                  <div className="p-0 border-t border-gray-800">
-                    <div className={`grid ${allNamesOriginal.length > 20 ? 'grid-cols-2' : 'grid-cols-1'} bg-gray-300 gap-px`}>
-                      {allNamesOriginal.map((name, idx) => {
-                        const gender = getGender(name);
-                        const bgColor = useGenderColor ? (gender === 'M' ? 'bg-blue-50 text-blue-900' : gender === 'F' ? 'bg-pink-50 text-pink-900' : 'bg-white text-gray-800') : 'bg-white text-gray-800';
-                        return (
-                          <div key={idx} className={`text-sm font-semibold px-4 py-2.5 flex items-center justify-center text-center ${bgColor}`}>
-                            {displayName(name)}
-                          </div>
-                        );
-                      })}
-                    </div>
+              {/* ⭐️ 배치도 하단 안내 문구 표시 (글자 크기, 굵기 동적 적용) */}
+              {footerNote && (
+                <div className="w-full mt-auto pt-6 border-t border-gray-100 flex justify-between items-end">
+                  <div className={`text-gray-600 ${footerFontSize} ${footerFontWeight} text-left whitespace-pre-wrap`}>
+                    {footerNote}
                   </div>
                 </div>
               )}
@@ -941,7 +1018,7 @@
             )}
           </div>
 
-          {showAdvanced && (
+          {showAdvanced && !isPresenting && (
             <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex justify-center items-center p-3 sm:p-4 no-print">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center p-3 sm:p-4 border-b border-gray-100 bg-gray-50">
@@ -980,7 +1057,6 @@
                     />
                   </div>
 
-                  {/* ⭐️ 이미지 업로드를 없애고 텍스트 붙여넣기를 크게 강조한 섹션 */}
                   <div className="bg-indigo-50 p-4 sm:p-5 rounded-xl border border-indigo-100">
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-sm font-bold text-indigo-900 block">🔄 이전 자리 배치표 (새 친구 사귀기)</label>
@@ -1004,22 +1080,6 @@
                       onChange={(e) => setPrevLayoutText(e.target.value)}
                     />
                   </div>
-
-                  {layoutMode === 'pair' && (
-                    <div className="flex items-center gap-2 sm:gap-3 bg-gray-50 p-2 sm:p-3 rounded-lg border border-gray-200">
-                      <input 
-                        type="checkbox" 
-                        id="gender-pair"
-                        checked={genderPairing}
-                        onChange={(e) => setGenderPairing(e.target.checked)}
-                        className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
-                      />
-                      <label htmlFor="gender-pair" className="text-xs sm:text-sm text-gray-800 cursor-pointer font-medium leading-tight">
-                        남녀 짝꿍 우선 배치<br/>
-                        <span className="text-[9px] sm:text-xs text-gray-500 font-normal">(명단 이름 끝에 '남', '여' 표기. 괄호 생략 가능)</span>
-                      </label>
-                    </div>
-                  )}
 
                   <div className="pt-3 sm:pt-4 border-t border-gray-100">
                     <button 
@@ -1079,15 +1139,6 @@
                         {isExporting ? "⏳ 변환 중..." : <><i className="fa-solid fa-file-pdf text-base sm:text-lg"></i> PDF로 저장</>}
                       </button>
                       
-                      {/* ⭐️ 텍스트 백업 전용 버튼 추가 */}
-                      <button
-                        onClick={copyGridToClipboard}
-                        disabled={isExporting}
-                        className="w-full flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2 sm:py-3 rounded-lg font-bold border border-emerald-200 transition-colors text-sm sm:text-base"
-                      >
-                        <i className="fa-solid fa-clipboard text-base sm:text-lg"></i> 다음 배치를 위한 텍스트 복사
-                      </button>
-
                       <div className="relative flex py-2 sm:py-3 items-center">
                         <div className="flex-grow border-t border-gray-200"></div>
                         <span className="flex-shrink-0 mx-3 sm:mx-4 text-gray-400 text-[10px] sm:text-xs">또는</span>
